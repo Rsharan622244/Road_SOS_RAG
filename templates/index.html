@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoadSoS — AI Road Emergency Assistant</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0f0f0f;--surface:#1a1a1a;--surface2:#222;
+    --border:#2a2a2a;--border2:#333;
+    --green:#4ade80;--green-dim:rgba(74,222,128,0.12);
+    --red:#f87171;--amber:#fbbf24;--blue:#60a5fa;
+    --text:#e8e8e8;--muted:#666;--dim:#444;
+  }
+  body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);
+       height:100vh;display:grid;grid-template-rows:56px 1fr;overflow:hidden}
+
+  header{background:var(--surface);border-bottom:1px solid var(--border);
+         display:flex;align-items:center;padding:0 20px;gap:12px}
+  .logo{font-size:20px}
+  header h1{font-size:16px;font-weight:600;color:var(--green)}
+  header span{font-size:12px;color:var(--muted);margin-left:4px}
+  .status-pill{margin-left:auto;font-size:11px;padding:4px 10px;
+               border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border2)}
+  .status-pill.ready{background:var(--green-dim);color:var(--green);border-color:rgba(74,222,128,0.3)}
+
+  main{display:grid;grid-template-columns:400px 1fr;overflow:hidden}
+
+  /* LEFT PANEL */
+  .left{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
+
+  .emergency-bar{background:#1f0a0a;border-bottom:1px solid #3a1a1a;
+                 padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .emergency-bar span{font-size:13px;color:var(--red);font-weight:500}
+  .call-btn{margin-left:auto;background:var(--red);color:#fff;border:none;
+            border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;
+            cursor:pointer;text-decoration:none}
+
+  /* TABS */
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+  .tab{flex:1;padding:10px;font-size:12px;font-weight:500;color:var(--muted);
+       background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;
+       transition:color .15s}
+  .tab.active{color:var(--green);border-bottom-color:var(--green)}
+  .tab:hover{color:var(--text)}
+
+  /* PANELS */
+  .panel{flex:1;overflow:hidden;display:none;flex-direction:column}
+  .panel.active{display:flex}
+
+  .chat-area{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;
+               justify-content:center;gap:10px;color:var(--dim);text-align:center;padding:20px}
+  .empty-state .icon{font-size:36px}
+  .empty-state p{font-size:13px;line-height:1.6;max-width:260px}
+
+  .msg{max-width:100%}
+  .msg-label{font-size:10px;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em}
+  .msg.user .msg-label{text-align:right}
+  .bubble{padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.6;white-space:pre-wrap}
+  .msg.user .bubble{background:var(--surface2);border:1px solid var(--border2);border-bottom-right-radius:3px}
+  .msg.ai .bubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:3px}
+
+  .severity-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;
+                  border-radius:6px;font-size:12px;font-weight:600;margin-bottom:8px}
+  .sev-CRITICAL{background:#3a0a0a;color:var(--red);border:1px solid #5a1a1a}
+  .sev-MODERATE{background:#2a1a00;color:var(--amber);border:1px solid #4a3a00}
+  .sev-MINOR{background:#0a2a0a;color:var(--green);border:1px solid #1a4a1a}
+
+  .first-aid{margin-top:8px;background:#0a1a2a;border:1px solid #1a3a5a;
+             border-radius:8px;padding:10px 12px}
+  .first-aid-title{font-size:11px;color:var(--blue);font-weight:600;
+                   text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+  .first-aid p{font-size:12px;color:#aac4e0;line-height:1.7;white-space:pre-line}
+
+  .offline-banner{background:#2a1a00;border:1px solid #4a3a00;border-radius:6px;
+                  padding:6px 10px;font-size:11px;color:var(--amber);margin-bottom:8px}
+
+  .services-section{margin-top:10px}
+  .services-title{font-size:11px;color:var(--muted);text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:8px}
+  .service-card{background:var(--surface2);border:1px solid var(--border2);
+                border-radius:8px;padding:10px 12px;margin-bottom:6px;
+                cursor:pointer;transition:border-color .15s}
+  .service-card:hover,.service-card.highlighted{border-color:var(--green);background:#0a1a0f}
+  .sc-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .sc-icon{font-size:16px}
+  .sc-name{font-size:13px;font-weight:500;flex:1}
+  .sc-dist{font-size:11px;color:var(--muted)}
+  .sc-address{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .sc-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .sc-call{background:var(--green);color:#0a1a0f;border:none;border-radius:5px;
+           padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;
+           text-decoration:none;display:inline-block}
+  .sc-map-btn{background:none;border:1px solid var(--border2);color:var(--muted);
+              border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer}
+  .sc-map-btn:hover{border-color:var(--blue);color:var(--blue)}
+
+  /* RAG chat tab */
+  .rag-source{font-size:11px;color:var(--dim);margin-top:6px}
+  .rag-source span{background:var(--surface2);padding:2px 7px;border-radius:4px;
+                   margin-right:4px;border:1px solid var(--border2)}
+
+  .thinking{display:flex;align-items:center;gap:8px;padding:10px 13px;
+            background:var(--surface);border:1px solid var(--border);
+            border-radius:10px;font-size:13px;color:var(--muted)}
+  .dots{display:flex;gap:3px}
+  .dots span{width:5px;height:5px;border-radius:50%;background:var(--green);
+             animation:bounce 1.2s infinite}
+  .dots span:nth-child(2){animation-delay:.2s}
+  .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-4px);opacity:1}}
+
+  .input-bar{border-top:1px solid var(--border);padding:10px 12px;
+             display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+  textarea{flex:1;background:var(--surface);border:1px solid var(--border2);
+           border-radius:8px;padding:9px 12px;color:var(--text);font-family:inherit;
+           font-size:13px;resize:none;outline:none;transition:border-color .2s;
+           max-height:90px;line-height:1.5}
+  textarea:focus{border-color:var(--green)}
+  textarea::placeholder{color:var(--dim)}
+  .send-btn{background:var(--green);color:#0a1a0f;border:none;border-radius:8px;
+            width:36px;height:36px;cursor:pointer;font-size:15px;flex-shrink:0;
+            transition:opacity .2s;display:flex;align-items:center;justify-content:center}
+  .send-btn:hover{opacity:.85}
+  .send-btn:disabled{opacity:.3;cursor:not-allowed}
+
+  .right{position:relative}
+  #map{width:100%;height:100%}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🚨</div>
+  <h1>RoadSoS <span>AI Road Emergency Assistant</span></h1>
+  <div class="status-pill" id="status-pill">Getting location...</div>
+</header>
+
+<main>
+  <div class="left">
+    <div class="emergency-bar">
+      <span>⚡ Emergency?</span>
+      <a class="call-btn" href="tel:112" id="emergency-call-btn">📞 Call 112</a>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('emergency', this)">🚨 Emergency</button>
+      <button class="tab" onclick="switchTab('firstaid', this)">🩹 First Aid Chat</button>
+    </div>
+
+    <!-- EMERGENCY PANEL -->
+    <div class="panel active" id="panel-emergency">
+      <div class="chat-area" id="emergency-chat">
+        <div class="empty-state" id="empty-emergency">
+          <div class="icon">🚗</div>
+          <p>Describe the accident below. RoadSoS finds the nearest help instantly.</p>
+          <p style="font-size:11px;color:var(--dim);margin-top:6px">
+            e.g. "Car hit divider, driver unconscious, NH65 Hyderabad"
+          </p>
+        </div>
+      </div>
+      <div class="input-bar">
+        <textarea id="emergency-input" rows="1" placeholder="Describe the accident..."></textarea>
+        <button class="send-btn" id="emergency-send">➤</button>
+      </div>
+    </div>
+
+    <!-- FIRST AID RAG PANEL -->
+    <div class="panel" id="panel-firstaid">
+      <div class="chat-area" id="rag-chat">
+        <div class="empty-state" id="empty-rag">
+          <div class="icon">🩹</div>
+          <p>Ask any first-aid question. Powered by RAG — answers from medical guidelines.</p>
+          <p style="font-size:11px;color:var(--dim);margin-top:6px">
+            e.g. "How do I do CPR?" or "What to do for heavy bleeding?"
+          </p>
+        </div>
+      </div>
+      <div class="input-bar">
+        <textarea id="rag-input" rows="1" placeholder="Ask a first-aid question..."></textarea>
+        <button class="send-btn" id="rag-send">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div id="map"></div>
+  </div>
+</main>
+
+<script>
+let userLat = null, userLng = null, map = null, markers = [];
+
+// TABS
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// LOCATION
+function initLocation() {
+  if (!navigator.geolocation) { setStatus("Location unavailable", false); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; setStatus("📍 Location ready", true); initMap(); },
+    ()  => { userLat = 17.3850; userLng = 78.4867; setStatus("📍 Using Hyderabad (demo)", true); initMap(); }
+  );
+}
+function setStatus(t, r) {
+  const p = document.getElementById("status-pill");
+  p.textContent = t; p.className = "status-pill" + (r ? " ready" : "");
+}
+
+// MAP
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: {lat: userLat, lng: userLng}, zoom: 13,
+    styles: [
+      {elementType:"geometry",stylers:[{color:"#1a1a1a"}]},
+      {elementType:"labels.text.stroke",stylers:[{color:"#1a1a1a"}]},
+      {elementType:"labels.text.fill",stylers:[{color:"#888"}]},
+      {featureType:"road",elementType:"geometry",stylers:[{color:"#2a2a2a"}]},
+      {featureType:"water",elementType:"geometry",stylers:[{color:"#0a0a2a"}]},
+    ]
+  });
+  new google.maps.Marker({
+    position:{lat:userLat,lng:userLng}, map,
+    icon:{path:google.maps.SymbolPath.CIRCLE,scale:10,fillColor:"#60a5fa",fillOpacity:1,strokeColor:"#fff",strokeWeight:2},
+    title:"Your location", zIndex:999
+  });
+}
+
+function clearMarkers() { markers.forEach(m => m.setMap(null)); markers = []; }
+
+function plotServices(services) {
+  clearMarkers();
+  const COLORS = {hospital:"#f87171",ambulance_service:"#fb923c",police:"#60a5fa",towing_service:"#a78bfa",car_repair:"#fbbf24",tire_shop:"#34d399"};
+  Object.entries(services).forEach(([type, places]) => {
+    places.forEach((place, i) => {
+      const marker = new google.maps.Marker({
+        position:{lat:place.lat,lng:place.lng}, map, title:place.name,
+        label:{text:place.icon||"📍",fontSize:"18px"}, zIndex:100-i
+      });
+      const iw = new google.maps.InfoWindow({content:`
+        <div style="font-family:sans-serif;padding:4px;min-width:180px">
+          <div style="font-weight:600;margin-bottom:4px">${place.icon} ${place.name}</div>
+          <div style="font-size:12px;color:#555;margin-bottom:4px">${place.address}</div>
+          <div style="font-size:12px;margin-bottom:6px">📞 ${place.phone}</div>
+          <div style="font-size:11px;color:#888">${place.distance_km} km away</div>
+          ${place.phone!=="Not available"?`<a href="tel:${place.phone}" style="display:inline-block;margin-top:6px;background:#4ade80;color:#0a1a0f;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;text-decoration:none">📞 Call</a>`:""}
+        </div>`});
+      marker.addListener("click", () => { iw.open(map, marker); highlightCard(place.place_id); });
+      markers.push(marker);
+    });
+  });
+  if (markers.length > 0) {
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({lat:userLat,lng:userLng});
+    markers.forEach(m => bounds.extend(m.getPosition()));
+    map.fitBounds(bounds, {padding:60});
+  }
+}
+
+function highlightCard(placeId) {
+  document.querySelectorAll(".service-card").forEach(c => c.classList.remove("highlighted"));
+  const card = document.querySelector(`[data-place-id="${placeId}"]`);
+  if (card) { card.classList.add("highlighted"); card.scrollIntoView({behavior:"smooth",block:"nearest"}); }
+}
+function panToPlace(lat, lng, placeId) {
+  if (!map) return;
+  map.panTo({lat,lng}); map.setZoom(16); highlightCard(placeId);
+}
+
+// ── EMERGENCY TAB ────────────────────────────────────────────────────────
+const emergencyInput = document.getElementById("emergency-input");
+const emergencySend  = document.getElementById("emergency-send");
+const emergencyChat  = document.getElementById("emergency-chat");
+
+emergencyInput.addEventListener("keydown", e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendEmergency();} });
+emergencyInput.addEventListener("input", () => autoResize(emergencyInput));
+emergencySend.addEventListener("click", sendEmergency);
+
+async function sendEmergency() {
+  const text = emergencyInput.value.trim();
+  if (!text || !userLat) return;
+  document.getElementById("empty-emergency")?.remove();
+  appendTo(emergencyChat, "user", text);
+  emergencyInput.value = ""; autoResize(emergencyInput);
+  emergencySend.disabled = true;
+  const thinking = appendThinkingTo(emergencyChat, "Assessing situation...");
+
+  try {
+    const res = await fetch("/nearby", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({description:text, lat:userLat, lng:userLng, country_code:"IN"})
+    });
+    const data = await res.json();
+    thinking.remove();
+    if (data.error) { appendTo(emergencyChat, "ai", "❌ " + data.error); }
+    else { renderEmergencyResult(data); }
+  } catch(e) {
+    thinking.remove();
+    appendTo(emergencyChat, "ai", "❌ Network error. Is the server running?");
+  }
+  emergencySend.disabled = false;
+  emergencyInput.focus();
+}
+
+function renderEmergencyResult(data) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "msg ai";
+  wrapper.innerHTML = `<div class="msg-label">RoadSoS</div>`;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+
+  if (data.offline_mode) {
+    bubble.innerHTML += `<div class="offline-banner">⚠️ Offline mode — showing last known services</div>`;
+  }
+
+  bubble.innerHTML += `
+    <div class="severity-badge sev-${data.severity}">
+      ${({CRITICAL:"🔴",MODERATE:"🟡",MINOR:"🟢"}[data.severity] || "⚪")}
+      ${data.severity} — ${data.severity_reason||""}
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--amber)">⚡ ${data.call_action||""}</div>`;
+
+  if (data.first_aid_tip) {
+    bubble.innerHTML += `<div class="first-aid"><div class="first-aid-title">🩹 Immediate First Aid</div><p>${data.first_aid_tip}</p></div>`;
+  }
+
+  if (data.services && Object.keys(data.services).length > 0) {
+    const sec = document.createElement("div");
+    sec.className = "services-section";
+    sec.innerHTML = `<div class="services-title">📍 ${data.total_contacts} nearby contacts found</div>`;
+    (data.priority_services||[]).forEach(type => {
+      (data.services[type]||[]).forEach(place => {
+        const card = document.createElement("div");
+        card.className = "service-card"; card.dataset.placeId = place.place_id;
+        card.innerHTML = `
+          <div class="sc-header"><span class="sc-icon">${place.icon}</span><span class="sc-name">${place.name}</span><span class="sc-dist">${place.distance_km} km</span></div>
+          <div class="sc-address">${place.address}</div>
+          <div class="sc-actions">
+            ${place.phone!=="Not available"?`<a class="sc-call" href="tel:${place.phone}">📞 ${place.phone}</a>`:`<span style="font-size:11px;color:var(--dim)">No phone</span>`}
+            <button class="sc-map-btn" onclick="panToPlace(${place.lat},${place.lng},'${place.place_id}')">🗺 Map</button>
+          </div>`;
+        sec.appendChild(card);
+      });
+    });
+    bubble.appendChild(sec);
+    plotServices(data.services);
+  } else {
+    bubble.innerHTML += `<div style="font-size:13px;color:var(--muted);margin-top:10px">No nearby services found. Call <strong style="color:var(--red)">${data.emergency_numbers?.unified||"112"}</strong> immediately.</div>`;
+  }
+
+  wrapper.appendChild(bubble);
+  emergencyChat.appendChild(wrapper);
+  emergencyChat.scrollTop = emergencyChat.scrollHeight;
+
+  const unified = data.emergency_numbers?.unified;
+  if (unified) {
+    document.getElementById("emergency-call-btn").href = `tel:${unified}`;
+    document.getElementById("emergency-call-btn").textContent = `📞 Call ${unified}`;
+  }
+}
+
+// ── FIRST AID RAG TAB ────────────────────────────────────────────────────
+const ragInput = document.getElementById("rag-input");
+const ragSend  = document.getElementById("rag-send");
+const ragChat  = document.getElementById("rag-chat");
+
+ragInput.addEventListener("keydown", e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendRag();} });
+ragInput.addEventListener("input", () => autoResize(ragInput));
+ragSend.addEventListener("click", sendRag);
+
+async function sendRag() {
+  const text = ragInput.value.trim();
+  if (!text) return;
+  document.getElementById("empty-rag")?.remove();
+  appendTo(ragChat, "user", text);
+  ragInput.value = ""; autoResize(ragInput);
+  ragSend.disabled = true;
+  const thinking = appendThinkingTo(ragChat, "Searching knowledge base...");
+
+  try {
+    const res = await fetch("/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({question: text})
+    });
+    const data = await res.json();
+    thinking.remove();
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg ai";
+    wrapper.innerHTML = `<div class="msg-label">First Aid Assistant</div>`;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = data.answer || data.error || "Sorry, I could not find an answer.";
+
+    if (data.sources && data.sources.length > 0) {
+      const src = document.createElement("div");
+      src.className = "rag-source";
+      src.innerHTML = "Sources: " + data.sources.map(s => `<span>${s}</span>`).join("");
+      bubble.appendChild(src);
+    }
+
+    wrapper.appendChild(bubble);
+    ragChat.appendChild(wrapper);
+    ragChat.scrollTop = ragChat.scrollHeight;
+
+  } catch(e) {
+    thinking.remove();
+    appendTo(ragChat, "ai", "❌ Error. Check the server.");
+  }
+  ragSend.disabled = false;
+  ragInput.focus();
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────
+function appendTo(container, role, text) {
+  const w = document.createElement("div");
+  w.className = `msg ${role}`;
+  w.innerHTML = `<div class="msg-label">${role==="user"?"You":"RoadSoS"}</div><div class="bubble">${text}</div>`;
+  container.appendChild(w);
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendThinkingTo(container, label) {
+  const w = document.createElement("div");
+  w.className = "msg ai";
+  w.innerHTML = `<div class="msg-label">RoadSoS</div>
+    <div class="thinking"><div class="dots"><span></span><span></span><span></span></div> ${label}</div>`;
+  container.appendChild(w);
+  container.scrollTop = container.scrollHeight;
+  return w;
+}
+
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 90) + "px";
+}
+
+initLocation();
+</script>
+
+<!-- Replace YOUR_GOOGLE_MAPS_API_KEY below -->
+<script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=Function.prototype" async defer></script>
+</body>
+</html>
