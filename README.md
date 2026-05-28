@@ -20,8 +20,7 @@ pinned: false
 ---
 
 ## 🔴 Live Demo
-🔗 [Live App on Hugging Face Spaces](#) *(link after deployment)*
-
+🔗 [Live App on Hugging Face Spaces](https://huggingface.co/spaces/Rsharan622244/Road_SOS)
 ---
 
 ## 🎯 Problem
