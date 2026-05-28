@@ -1,3 +1,16 @@
+---
+
+title: RoadSoS
+emoji: 🚑
+colorFrom: blue
+colorTo: red
+sdk: docker
+app_file: app.py
+pinned: false
+-------------
+
+
+
 # 🚨 RoadSoS — AI Road Emergency Assistant
 
 > Road Safety Hackathon 2026 | IIT Madras CoERS | Problem Statement: RoadSoS
